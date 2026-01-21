@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tabelão • BU</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+
+<body>
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">Tabelão • BU</div>
+
+    <div class="month-filter">
+      <label for="monthFilter">Mês</label>
+      <select id="monthFilter">
+        <option value="ALL">Todos</option>
+      </select>
+    </div>
+
+    <button class="nav-btn active" data-bu="imoveis" type="button">Imóveis</button>
+    <button class="nav-btn" data-bu="carbuy" type="button">Carbuy</button>
+    <button class="nav-btn" data-bu="veiculos" type="button">Veículos</button>
+
+    <div class="updated" id="updatedAt"></div>
+  </aside>
+
+  <main class="content">
+    <div class="topbar">
+      <button class="menu-toggle" id="menuToggle" title="Ocultar/mostrar menu">☰</button>
+      <div>
+        <div class="title">Dashboard por BU</div>
+        <div class="subtitle" id="subtitle">Fonte: -</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead id="thead"></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+</div>
+
+<script>
+const MANIFEST_URL = "data/manifest.json";
+
+// estado
+let manifest = null;
+let currentBU = "imoveis";
+let selectedMonth = "ALL";
+
+// dados
+let loadedRows = [];
+let partsForSelection = [];
+let nextPartIndex = 0;
+
+// render
+let SHOW_LIMIT = 300;
+
+function setSubtitle(text){
+  document.getElementById("subtitle").textContent = text;
+}
+
+function showStatus(msg){
+  const thead = document.getElementById("thead");
+  const tbody = document.getElementById("tbody");
+  thead.innerHTML = "<tr><th>Status</th></tr>";
+  tbody.innerHTML = `<tr><td>${msg}</td></tr>`;
+}
+
+async function fetchJson(url){
+  const r = await fetch(url, { cache: "no-store" });
+  if(!r.ok) throw new Error(`HTTP ${r.status} em ${url}`);
+  return await r.json();
+}
+
+function getMonthSelection(){
+  return document.getElementById("monthFilter").value;
+}
+
+function resetState(){
+  loadedRows = [];
+  partsForSelection = [];
+  nextPartIndex = 0;
+  SHOW_LIMIT = 300;
+}
+
+function getPartsFor(bu, month){
+  const buMap = (manifest.files && manifest.files[bu]) ? manifest.files[bu] : {};
+  return buMap[month] || [];
+}
+
+function chooseMonth(){
+  const m = getMonthSelection();
+  if(m === "ALL"){
+    // se ALL, usa o último mês disponível
+    return (manifest.months && manifest.months.length) ? manifest.months[manifest.months.length - 1] : "SEM_MES";
+  }
+  return m;
+}
+
+function renderTable(){
+  const thead = document.getElementById("thead");
+  const tbody = document.getElementById("tbody");
+  thead.innerHTML = "";
+  tbody.innerHTML = "";
+
+  if(!loadedRows.length){
+    showStatus("Nenhuma linha carregada.");
+    return;
+  }
+
+  const first = loadedRows.find(r => r && typeof r === "object") || loadedRows[0];
+  const cols = Object.keys(first).filter(c => c !== "__month");
+
+  thead.innerHTML = "<tr>" + cols.map(c => `<th>${c}</th>`).join("") + "</tr>";
+
+  const slice = loadedRows.slice(0, SHOW_LIMIT);
+
+  for(const row of slice){
+    const tr = document.createElement("tr");
+    for(const c of cols){
+      const td = document.createElement("td");
+      const v = row[c];
+      td.textContent = (v === null || v === undefined) ? "" : v;
+      tr.appendChild(td);
+    }
+    tbody.appendChild(tr);
+  }
+
+  // controles
+  const hasMoreRender = slice.length < loadedRows.length;
+  const hasMoreDownload = nextPartIndex < partsForSelection.length;
+
+  const trCtrl = document.createElement("tr");
+  const tdCtrl = document.createElement("td");
+  tdCtrl.colSpan = cols.length;
+
+  tdCtrl.innerHTML = `
+    <div class="controls">
+      <div class="controls-left">
+        Mostrando <b>${slice.length}</b> de <b>${loadedRows.length}</b> linhas baixadas
+        ${hasMoreDownload ? " (ainda tem mais partes para baixar)" : ""}
+      </div>
+      <div class="controls-right">
+        ${hasMoreRender ? `<button class="ctrl-btn" id="btnMoreRender">Mostrar +300</button>` : ""}
+        ${hasMoreDownload ? `<button class="ctrl-btn primary" id="btnMoreDownload">Baixar próxima parte</button>` : ""}
+      </div>
+    </div>
+  `;
+
+  trCtrl.appendChild(tdCtrl);
+  tbody.appendChild(trCtrl);
+
+  const btnMoreRender = document.getElementById("btnMoreRender");
+  if(btnMoreRender){
+    btnMoreRender.onclick = () => {
+      SHOW_LIMIT += 300;
+      renderTable();
+    };
+  }
+
+  const btnMoreDownload = document.getElementById("btnMoreDownload");
+  if(btnMoreDownload){
+    btnMoreDownload.onclick = async () => {
+      await downloadNextPart();
+    };
+  }
+}
+
+async function downloadNextPart(){
+  if(nextPartIndex >= partsForSelection.length) return;
+
+  const part = partsForSelection[nextPartIndex];
+  nextPartIndex += 1;
+
+  showStatus(`Baixando parte ${nextPartIndex}/${partsForSelection.length}…`);
+  const rows = await fetchJson(`data/${part.file}`);
+  loadedRows = loadedRows.concat(rows);
+
+  renderTable();
+}
+
+async function loadSelection(){
+  resetState();
+
+  const monthChosen = chooseMonth();
+  const parts = getPartsFor(currentBU, monthChosen);
+
+  if(!parts.length){
+    showStatus(`Sem dados para ${currentBU} no mês ${monthChosen}.`);
+    return;
+  }
+
+  partsForSelection = parts;
+  nextPartIndex = 0;
+
+  await downloadNextPart();
+}
+
+function populateMonthFilter(){
+  const sel = document.getElementById("monthFilter");
+  const prev = sel.value || "ALL";
+  sel.innerHTML = "";
+
+  const optAll = document.createElement("option");
+  optAll.value = "ALL";
+  optAll.textContent = "Todos";
+  sel.appendChild(optAll);
+
+  (manifest.months || []).forEach(m => {
+    const o = document.createElement("option");
+    o.value = m;
+    o.textContent = (manifest.months_label && manifest.months_label[m]) ? manifest.months_label[m] : m;
+    sel.appendChild(o);
+  });
+
+  sel.value = prev;
+}
+
+async function bootstrap(){
+  showStatus("Carregando manifest…");
+  manifest = await fetchJson(MANIFEST_URL);
+
+  setSubtitle(`Fonte: ${manifest.source || "-"}`);
+  document.getElementById("updatedAt").innerHTML =
+    "Atualizado:<br>" + new Date().toLocaleString("pt-BR");
+
+  populateMonthFilter();
+
+  document.querySelectorAll(".nav-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      currentBU = btn.dataset.bu;
+      await loadSelection();
+    });
+  });
+
+  document.getElementById("monthFilter").addEventListener("change", async () => {
+    await loadSelection();
+  });
+
+  // toggle menu
+  document.getElementById("menuToggle").addEventListener("click", () => {
+    document.body.classList.toggle("sidebar-collapsed");
+  });
+
+  await loadSelection();
+}
+
+bootstrap().catch(err => {
+  console.error(err);
+  showStatus("Erro ao iniciar (ver Console/F12).");
+});
+</script>
+
+</body>
+</html>

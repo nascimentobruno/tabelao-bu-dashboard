@@ -1,4 +1,10 @@
-docs/index.html
-*.xlsx
+# ambiente
+.venv/
 __pycache__/
 *.pyc
+
+# cache/temporários
+.DS_Store
+
+# excel (se você não quiser subir o arquivo fonte)
+TABELAO_v1.0.xlsx
