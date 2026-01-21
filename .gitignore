@@ -1,4 +1,4 @@
 docs/index.html
+*.xlsx
 __pycache__/
 *.pyc
-*.xlsx
