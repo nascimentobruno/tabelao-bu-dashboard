@@ -1,5 +1,5 @@
 {
-  "generated_at": "21/01/2026 15:26",
+  "generated_at": "21/01/2026 16:18",
   "source": "TABELAO_v1.0.xlsx",
   "months": [
     "2026-01"
@@ -8,7 +8,7 @@
     "imoveis": {
       "2026-01": [
         {
-          "file": "imoveis_2026-01_part1.json",
+          "file": "imoveis/2026-01_part1.json",
           "rows": 31
         }
       ]
@@ -16,7 +16,7 @@
     "carbuy": {
       "2026-01": [
         {
-          "file": "carbuy_2026-01_part1.json",
+          "file": "carbuy/2026-01_part1.json",
           "rows": 31
         }
       ]
@@ -24,7 +24,7 @@
     "veiculos": {
       "2026-01": [
         {
-          "file": "veiculos_2026-01_part1.json",
+          "file": "veiculos/2026-01_part1.json",
           "rows": 31
         }
       ]
