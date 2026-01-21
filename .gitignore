@@ -1,2 +1,4 @@
-TABELAO_v1.0.xlsx
 docs/index.html
+__pycache__/
+*.pyc
+*.xlsx
