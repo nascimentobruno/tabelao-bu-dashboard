@@ -60,17 +60,15 @@ def ym_from_date_str(date_str: str) -> str:
 def as_decimal_money(value):
     """
     Converte valor vindo do Excel (float/int/str) para Decimal com 2 casas.
-    Evita o bug do 5182575.239999999 virar 5.182.575.239.999.999,00.
+    Evita bug de float.
     Retorna Decimal ou None.
     """
     if value is None or value == "" or value == "-":
         return None
 
-    # Numérico direto
     if isinstance(value, (int, float, Decimal, np.integer, np.floating)):
         return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
-    # Texto "R$ 5.182.575,24" ou "5.182.575,24"
     if isinstance(value, str):
         s = value.strip().replace("R$", "").strip()
         if not s:
@@ -82,6 +80,37 @@ def as_decimal_money(value):
             return None
 
     return None
+
+
+def to_float_number(value):
+    """Converte número texto/float em float (suporta pt-BR e EN)."""
+    if value is None or value == "" or value == "-":
+        return None
+
+    if isinstance(value, (int, float, np.integer, np.floating)):
+        v = float(value)
+        return v if np.isfinite(v) else None
+
+    if isinstance(value, str):
+        s = value.strip()
+        if not s:
+            return None
+        s = s.replace("%", "").replace("R$", "").strip()
+
+        # pt-BR (1.234,56)
+        if "," in s:
+            s = s.replace(".", "").replace(",", ".")
+        try:
+            v = float(s)
+            return v if np.isfinite(v) else None
+        except Exception:
+            return None
+
+    try:
+        v = float(value)
+        return v if np.isfinite(v) else None
+    except Exception:
+        return None
 
 
 def fmt_efficiency(x):
@@ -119,8 +148,12 @@ def json_safe(df: pd.DataFrame) -> pd.DataFrame:
 
 def is_money_col(col_name: str) -> bool:
     c = norm(col_name)
-    # cobre seus casos: "R$ Estoque" e "Faturamento"
-    return ("r$" in c) or ("faturamento" in c)
+    return ("r$" in c) or ("faturamento" in c) or (c == "cpc") or ("cpc" in c)
+
+
+def is_percent_col(col_name: str) -> bool:
+    c = norm(col_name)
+    return (c == "ctr") or ("ctr" in c)
 
 
 # =========================
@@ -150,6 +183,10 @@ def main():
         df = df.loc[:, ~df.columns.astype(str).str.startswith("Unnamed")]
         df = df.dropna(axis=1, how="all")
 
+        # ✅ fallback rename
+        if "CAD ENC" in df.columns and "Cad Totais" not in df.columns:
+            df = df.rename(columns={"CAD ENC": "Cad Totais"})
+
         if "Data" not in df.columns:
             continue
 
@@ -157,13 +194,13 @@ def main():
         df["Data"] = df["Data"].map(fmt_date)
         df["__month"] = df["Data"].map(ym_from_date_str)
 
-        # 🚫 remove linhas SEM MÊS
+        # remove linhas sem mês
         df = df[df["__month"] != ""]
 
         if df.empty:
             continue
 
-        # formata colunas (CORREÇÃO: moeda vira NÚMERO no JSON, não string "R$ ...")
+        # formata colunas
         for col in df.columns:
             if col == "__month":
                 continue
@@ -171,15 +208,27 @@ def main():
             c = norm(col)
 
             if "eficiencia" in c:
+                # mantém string com %
                 df[col] = df[col].map(fmt_efficiency)
 
             elif is_money_col(col):
-                # transforma em float com 2 casas (via Decimal), sem explodir
+                # moeda => float 2 casas
                 def _money_to_float(v):
                     d = as_decimal_money(v)
                     return float(d) if d is not None else 0.0
-
                 df[col] = df[col].map(_money_to_float)
+
+            elif is_percent_col(col):
+                # CTR => manter numérico no JSON (padrão 0-1)
+                def _ctr_to_float(v):
+                    n = to_float_number(v)
+                    if n is None:
+                        return 0.0
+                    # se vier 12.3 (12,3%) => vira 0.123
+                    if n > 1:
+                        n = n / 100.0
+                    return float(n)
+                df[col] = df[col].map(_ctr_to_float)
 
         df = json_safe(df)
 
@@ -206,8 +255,6 @@ def main():
                 with open(out_dir / fname, "w", encoding="utf-8") as f:
                     json.dump(part, f, ensure_ascii=False)
 
-                # ✅ melhor: manifest guarda só o nome do arquivo
-                # (seu index já monta data/<BU>/<file>)
                 manifest["files"][bu][month].append({
                     "file": fname,
                     "rows": len(part)
@@ -218,7 +265,7 @@ def main():
     with open(DATA_DIR / "manifest.json", "w", encoding="utf-8") as f:
         json.dump(manifest, f, ensure_ascii=False, indent=2)
 
-    print("OK — dashboard gerado (SEM SEM_MES) e moeda numérica (sem bug de float)")
+    print("OK — dashboard gerado (CTR numérico, CPC numérico, rename CAD ENC -> Cad Totais)")
 
 
 if __name__ == "__main__":

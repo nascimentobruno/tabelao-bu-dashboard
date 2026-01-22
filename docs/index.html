@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Tabelão • BU</title>
+  <title>GRUPO VPL</title>
   <link rel="stylesheet" href="assets/style.css">
 </head>
 
@@ -14,7 +14,7 @@
       <div class="login-brand">
         <div class="login-mark">T</div>
         <div class="login-title">
-          <div class="login-h1">Tabelão • BU</div>
+          <div class="login-h1">Grupo VPL</div>
           <div class="login-h2">Acesso restrito</div>
         </div>
       </div>
@@ -44,7 +44,7 @@
   <!-- APP -->
   <div class="layout" id="appRoot" style="visibility:hidden;">
     <aside class="sidebar" id="sidebar">
-      <div class="brand">Tabelão • BU</div>
+      <div class="brand">Grupo VPL</div>
 
       <div class="month-filter">
         <label for="monthFilter">Mês</label>
@@ -68,7 +68,7 @@
       <div class="topbar">
         <button id="btnToggleSidebar" class="menu-btn" type="button" title="Ocultar/mostrar menu">☰</button>
         <div>
-          <div class="title">Dashboard por BU</div>
+          <div class="title">DashBoard MKT Team</div>
           <div class="subtitle" id="sourceSubtitle">Fonte: —</div>
         </div>
       </div>
@@ -121,14 +121,23 @@ async function fetchJson(url) {
 }
 
 /* =========================
-   FORMATAÇÃO (FIX R$ ESTOQUE)
+   FORMATAÇÃO (R$ / %)
    ========================= */
 
-// Colunas que devem ser tratadas como dinheiro (R$)
-// Se tiver mais colunas de moeda, coloque aqui.
+// dinheiro (R$)
 const MONEY_COLS = new Set([
   "R$ Estoque",
-  "Faturamento"
+  "Faturamento",
+  "CPC",
+  "CPC (R$)",
+  "CPC R$"
+]);
+
+// percentual (%)
+const PERCENT_COLS = new Set([
+  "CTR",
+  "CTR (%)",
+  "CTR %"
 ]);
 
 function toNumber(v) {
@@ -139,25 +148,30 @@ function toNumber(v) {
     let s = v.trim();
     if (!s) return null;
 
-    // remove símbolos e espaços
-    s = s.replace(/\s/g, "").replace("R$", "");
+    s = s.replace(/\s/g, "")
+         .replace("R$", "")
+         .replace("%", "");
 
-    // Se tiver vírgula => formato pt-BR: 1.234,56
-    // Aí sim removemos os pontos de milhar.
+    // pt-BR: 1.234,56
     if (s.includes(",")) {
       s = s.replace(/\./g, "").replace(",", ".");
       const n = Number(s);
       return Number.isFinite(n) ? n : null;
     }
 
-    // Se NÃO tem vírgula, o ponto é decimal normal (ex.: 5182575.24)
-    // NÃO pode remover.
     const n = Number(s);
     return Number.isFinite(n) ? n : null;
   }
 
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
+}
+
+function formatPercentSmart(n) {
+  // aceita 0.1234 => 12,34%
+  // aceita 12.34 => 12,34%
+  const pct = (n >= 0 && n <= 1) ? n * 100 : n;
+  return pct.toLocaleString("pt-BR", { maximumFractionDigits: 2, minimumFractionDigits: 2 }) + "%";
 }
 
 function formatCell(col, v) {
@@ -170,12 +184,18 @@ function formatCell(col, v) {
     return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
   }
 
-  // eficiência: aceita 0.5333 (53,33%) ou 53.33 (já em %)
+  // percentual (CTR)
+  if (PERCENT_COLS.has(col)) {
+    const n = toNumber(v);
+    if (n === null) return String(v);
+    return formatPercentSmart(n);
+  }
+
+  // eficiência
   if (col === "Eficiência") {
     const n = toNumber(v);
     if (n === null) return String(v);
-    const pct = (n >= 0 && n <= 1) ? n * 100 : n;
-    return pct.toLocaleString("pt-BR", { maximumFractionDigits: 2 }) + "%";
+    return formatPercentSmart(n);
   }
 
   // estoque (quantidade)
@@ -262,7 +282,7 @@ function renderTable() {
     const tr = document.createElement("tr");
     for (const c of cols) {
       const td = document.createElement("td");
-      td.textContent = formatCell(c, row[c]); // <-- AQUI É O FIX
+      td.textContent = formatCell(c, row[c]);
       tr.appendChild(td);
     }
     tbody.appendChild(tr);
@@ -309,13 +329,8 @@ async function downloadNextPart() {
 
   showEmpty(`Baixando parte ${nextPartIndex}/${partsForSelection.length}…`);
 
-  // part.file pode vir:
-  // 1) "2026-01_part1.json" (sem pasta)
-  // 2) "imoveis/2026-01_part1.json" (com pasta)
-  // então aqui a gente NORMALIZA:
   let filePath = String(part.file || "").replace(/^\/+/, "");
 
-  // se já começar com "imoveis/" ou "carbuy/" ou "veiculos/", NÃO duplica
   const needsPrefix =
     !(filePath.startsWith("imoveis/") || filePath.startsWith("carbuy/") || filePath.startsWith("veiculos/"));
 
