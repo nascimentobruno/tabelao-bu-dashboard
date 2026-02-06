@@ -12,7 +12,7 @@ import numpy as np
 # =========================
 # CONFIG
 # =========================
-EXCEL_FILE = Path("TABELAO_v1.0.xlsx")
+EXCEL_FILE = Path(r"C:\tabelao-bu-dashboard\TABELÃO_v1.0.xlsx")
 
 DOCS_DIR = Path("docs")
 DATA_DIR = DOCS_DIR / "data"
