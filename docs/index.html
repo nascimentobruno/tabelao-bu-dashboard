@@ -5,6 +5,95 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>GRUPO VPL</title>
   <link rel="stylesheet" href="assets/style.css">
+
+  <!-- CSS extra só pra abas + consolidado (sem mexer no style.css) -->
+  <style>
+    .tabsbar{
+      display:flex; gap:10px; align-items:center; justify-content:center;
+      padding:14px 14px 0 14px;
+    }
+    .tab-btn{
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.06);
+      color: inherit;
+      padding:10px 16px;
+      border-radius: 999px;
+      cursor:pointer;
+      font-weight: 700;
+      letter-spacing:.2px;
+      transition: transform .08s ease, background .15s ease;
+      user-select:none;
+    }
+    .tab-btn:hover{ transform: translateY(-1px); }
+    .tab-btn.active{
+      background: rgba(255,255,255,.14);
+      border-color: rgba(255,255,255,.22);
+    }
+
+    .consolidated-wrap{
+      padding: 14px;
+      border-bottom: 1px solid rgba(255,255,255,.10);
+      display:none;
+    }
+    .consolidated-grid{
+      display:grid;
+      grid-template-columns: 1.2fr .8fr;
+      gap: 14px;
+      align-items: stretch;
+    }
+    .mini-cards{
+      display:grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+    .mini-card{
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.06);
+      border-radius: 14px;
+      padding: 12px 12px;
+      display:flex;
+      gap: 10px;
+      align-items:center;
+      min-height: 64px;
+    }
+    .mini-ico{
+      width: 42px; height:42px;
+      border-radius: 12px;
+      display:flex; align-items:center; justify-content:center;
+      background: rgba(255,255,255,.10);
+      flex: 0 0 42px;
+      font-size: 20px;
+    }
+    .mini-meta{ line-height: 1.2; }
+    .mini-title{ font-weight:800; opacity:.9; font-size: 13px; }
+    .mini-value{ font-weight:900; font-size: 16px; margin-top: 4px; }
+    .mini-sub{ font-size: 12px; opacity: .75; margin-top: 2px; }
+
+    .chart-card{
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.06);
+      border-radius: 14px;
+      padding: 12px;
+      overflow:hidden;
+    }
+    .chart-title{
+      font-weight: 900;
+      margin: 0 0 8px 0;
+      font-size: 14px;
+      opacity:.95;
+    }
+    .chart-legend{
+      display:flex; flex-wrap:wrap; gap:10px;
+      font-size: 12px;
+      opacity: .85;
+      margin-bottom: 8px;
+    }
+    .lg-dot{ display:inline-block; width:10px; height:10px; border-radius:999px; background: currentColor; margin-right:6px; }
+    .muted2{ opacity:.7; }
+    .loading-inline{
+      font-size:12px; opacity:.8; margin-top:8px;
+    }
+  </style>
 </head>
 
 <body>
@@ -71,9 +160,56 @@
           <div class="title">DashBoard MKT Team</div>
           <div class="subtitle" id="sourceSubtitle">Fonte: —</div>
         </div>
+        <div class="tabsbar">
+          <button id="tabDaily" class="tab-btn active" type="button">VISÃO DIÁRIA</button>
+          <button id="tabConsolidated" class="tab-btn" type="button">CONSOLIDADO</button>
+        </div>
       </div>
 
       <div class="card">
+
+        <!-- CONSOLIDATED HEADER (cards + chart) -->
+        <div id="consolidatedWrap" class="consolidated-wrap">
+          <div class="consolidated-grid">
+            <div class="chart-card">
+              <div class="chart-title">Evolução Mensal</div>
+              <div class="chart-legend" id="chartLegend"></div>
+              <div id="chartBox"></div>
+              <div class="loading-inline muted2" id="consolidatedStatus"></div>
+            </div>
+
+            <div class="mini-cards">
+              <div class="mini-card">
+                <div class="mini-ico">🏆</div>
+                <div class="mini-meta">
+                  <div class="mini-title">Melhor mês</div>
+                  <div class="mini-value" id="bestMonthVal">—</div>
+                  <div class="mini-sub" id="bestMonthSub">—</div>
+                </div>
+              </div>
+
+              <div class="mini-card">
+                <div class="mini-ico">⚠️</div>
+                <div class="mini-meta">
+                  <div class="mini-title">Pior mês</div>
+                  <div class="mini-value" id="worstMonthVal">—</div>
+                  <div class="mini-sub" id="worstMonthSub">—</div>
+                </div>
+              </div>
+
+              <div class="mini-card">
+                <div class="mini-ico">📈</div>
+                <div class="mini-meta">
+                  <div class="mini-title">Crescimento vs mês anterior</div>
+                  <div class="mini-value" id="growthVal">—</div>
+                  <div class="mini-sub" id="growthSub">—</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TABLE -->
         <div class="table-wrap">
           <table class="data-table">
             <thead id="thead"></thead>
@@ -120,6 +256,8 @@ async function fetchJson(url) {
   return await res.json();
 }
 
+function clamp(n, a, b){ return Math.max(a, Math.min(b, n)); }
+
 /* =========================
    FORMATAÇÃO (R$ / %)
    ========================= */
@@ -130,14 +268,23 @@ const MONEY_COLS = new Set([
   "Faturamento",
   "CPC",
   "CPC (R$)",
-  "CPC R$"
+  "CPC R$",
+  "Receita",
+  "Receita (R$)",
+  "Investimento",
+  "Gasto",
+  "Spend"
 ]);
 
 // percentual (%)
 const PERCENT_COLS = new Set([
   "CTR",
   "CTR (%)",
-  "CTR %"
+  "CTR %",
+  "Conversão",
+  "Conversão (%)",
+  "Taxa de Conversão",
+  "Eficiência"
 ]);
 
 function toNumber(v) {
@@ -184,15 +331,8 @@ function formatCell(col, v) {
     return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
   }
 
-  // percentual (CTR)
+  // percentual
   if (PERCENT_COLS.has(col)) {
-    const n = toNumber(v);
-    if (n === null) return String(v);
-    return formatPercentSmart(n);
-  }
-
-  // eficiência
-  if (col === "Eficiência") {
     const n = toNumber(v);
     if (n === null) return String(v);
     return formatPercentSmart(n);
@@ -247,6 +387,7 @@ function doLogout() {
 let manifestCache = null;
 let currentBU = "imoveis";
 let currentMonth = "ALL";
+let currentView = "daily"; // daily | consolidated
 
 let loadedRows = [];
 let partsForSelection = [];
@@ -260,23 +401,60 @@ function resetState() {
   renderLimit = PAGE_CHUNK_RENDER;
 }
 
-function renderTable() {
+function monthLabel(yyyyMM){
+  if (!yyyyMM) return "—";
+  if (yyyyMM.length !== 7) return yyyyMM;
+
+  const mesNum = yyyyMM.slice(5,7);
+  const ano = yyyyMM.slice(0,4);
+
+  const meses = {
+    "01":"Jan","02":"Fev","03":"Mar","04":"Abr",
+    "05":"Mai","06":"Jun","07":"Jul","08":"Ago",
+    "09":"Set","10":"Out","11":"Nov","12":"Dez"
+  };
+
+  return meses[mesNum] || mesNum;
+}
+
+
+function resolveMonth(manifest) {
+  if (currentMonth !== "ALL") return currentMonth;
+  const months = (manifest.months || []);
+  return months.length ? months[months.length - 1] : "";
+}
+
+function buildPartsUrl(part) {
+  let filePath = String(part.file || "").replace(/^\/+/, "");
+  const needsPrefix =
+    !(filePath.startsWith("imoveis/") || filePath.startsWith("carbuy/") || filePath.startsWith("veiculos/"));
+
+  return needsPrefix
+    ? `data/${currentBU}/${filePath}`
+    : `data/${filePath}`;
+}
+
+/* =========================
+   TABLE RENDER (genérico)
+   ========================= */
+function renderTableWithRows(rows, opts={}) {
   const thead = document.getElementById("thead");
   const tbody = document.getElementById("tbody");
   thead.innerHTML = "";
   tbody.innerHTML = "";
 
-  if (!loadedRows || loadedRows.length === 0) {
-    showEmpty("Nenhuma linha carregada ainda.");
+  if (!rows || rows.length === 0) {
+    showEmpty(opts.emptyMsg || "Sem dados.");
     return;
   }
 
-  const first = loadedRows.find(r => r && typeof r === "object") || loadedRows[0];
+  const first = rows.find(r => r && typeof r === "object") || rows[0];
   const cols = Object.keys(first).filter(c => c !== "__month");
 
   thead.innerHTML = "<tr>" + cols.map(c => `<th>${c}</th>`).join("") + "</tr>";
 
-  const slice = loadedRows.slice(0, renderLimit);
+  const limit = (opts.limit != null) ? opts.limit : rows.length;
+  const slice = rows.slice(0, limit);
 
   for (const row of slice) {
     const tr = document.createElement("tr");
@@ -288,39 +466,44 @@ function renderTable() {
     tbody.appendChild(tr);
   }
 
-  const trCtrl = document.createElement("tr");
-  const tdCtrl = document.createElement("td");
-  tdCtrl.colSpan = cols.length;
+  if (opts.controls) {
+    const trCtrl = document.createElement("tr");
+    const tdCtrl = document.createElement("td");
+    tdCtrl.colSpan = cols.length;
 
-  const shown = slice.length;
-  const totalLoaded = loadedRows.length;
+    const shown = slice.length;
+    const totalLoaded = rows.length;
 
-  const hasMoreRender = shown < totalLoaded;
-  const hasMoreDownload = nextPartIndex < partsForSelection.length;
+    const hasMoreRender = shown < totalLoaded;
+    const hasMoreDownload = opts.hasMoreDownload === true;
 
-  tdCtrl.innerHTML = `
-    <div class="table-controls">
-      <div class="table-controls__info">
-        Mostrando <b>${shown}</b> de <b>${totalLoaded}</b> linhas baixadas
-        ${hasMoreDownload ? "<span class='muted'>(mais dados disponíveis para baixar)</span>" : "<span class='muted'>(tudo baixado)</span>"}
+    tdCtrl.innerHTML = `
+      <div class="table-controls">
+        <div class="table-controls__info">
+          Mostrando <b>${shown}</b> de <b>${totalLoaded}</b> linhas baixadas
+          ${hasMoreDownload ? "<span class='muted'>(mais dados disponíveis para baixar)</span>" : "<span class='muted'>(tudo baixado)</span>"}
+        </div>
+        <div class="table-controls__actions">
+          ${hasMoreRender ? `<button id="btnMoreRender" class="mini-btn" type="button">Mostrar +${PAGE_CHUNK_RENDER}</button>` : ""}
+          ${hasMoreDownload ? `<button id="btnMoreDownload" class="mini-btn strong" type="button">Baixar próxima parte</button>` : ""}
+        </div>
       </div>
-      <div class="table-controls__actions">
-        ${hasMoreRender ? `<button id="btnMoreRender" class="mini-btn" type="button">Mostrar +${PAGE_CHUNK_RENDER}</button>` : ""}
-        ${hasMoreDownload ? `<button id="btnMoreDownload" class="mini-btn strong" type="button">Baixar próxima parte</button>` : ""}
-      </div>
-    </div>
-  `;
+    `;
 
-  trCtrl.appendChild(tdCtrl);
-  tbody.appendChild(trCtrl);
+    trCtrl.appendChild(tdCtrl);
+    tbody.appendChild(trCtrl);
 
-  const btnMoreRender = document.getElementById("btnMoreRender");
-  if (btnMoreRender) btnMoreRender.onclick = () => { renderLimit += PAGE_CHUNK_RENDER; renderTable(); };
+    const btnMoreRender = document.getElementById("btnMoreRender");
+    if (btnMoreRender) btnMoreRender.onclick = () => { renderLimit += PAGE_CHUNK_RENDER; renderDaily(); };
 
-  const btnMoreDownload = document.getElementById("btnMoreDownload");
-  if (btnMoreDownload) btnMoreDownload.onclick = async () => { await downloadNextPart(); };
+    const btnMoreDownload = document.getElementById("btnMoreDownload");
+    if (btnMoreDownload) btnMoreDownload.onclick = async () => { await downloadNextPart(); };
+  }
 }
 
+/* =========================
+   VISÃO DIÁRIA (como antes)
+   ========================= */
 async function downloadNextPart() {
   if (nextPartIndex >= partsForSelection.length) return;
 
@@ -329,29 +512,16 @@ async function downloadNextPart() {
 
   showEmpty(`Baixando parte ${nextPartIndex}/${partsForSelection.length}…`);
 
-  let filePath = String(part.file || "").replace(/^\/+/, "");
-
-  const needsPrefix =
-    !(filePath.startsWith("imoveis/") || filePath.startsWith("carbuy/") || filePath.startsWith("veiculos/"));
-
-  const url = needsPrefix
-    ? `data/${currentBU}/${filePath}`
-    : `data/${filePath}`;
-
+  const url = buildPartsUrl(part);
   console.log("FETCH:", url);
 
   const rows = await fetchJson(url);
   loadedRows = loadedRows.concat(rows);
-  renderTable();
+
+  renderDaily();
 }
 
-function resolveMonth(manifest) {
-  if (currentMonth !== "ALL") return currentMonth;
-  const months = (manifest.months || []);
-  return months.length ? months[months.length - 1] : "";
-}
-
-async function loadSelection() {
+async function loadSelectionDaily() {
   if (!manifestCache) return;
 
   resetState();
@@ -376,6 +546,340 @@ async function loadSelection() {
   await downloadNextPart();
 }
 
+function renderDaily() {
+  document.getElementById("consolidatedWrap").style.display = "none";
+  renderTableWithRows(loadedRows, {
+    emptyMsg: "Nenhuma linha carregada ainda.",
+    limit: renderLimit,
+    controls: true,
+    hasMoreDownload: nextPartIndex < partsForSelection.length
+  });
+}
+
+/* =========================
+   CONSOLIDADO (mês fechado)
+   ========================= */
+
+/**
+ * Heurística de agregação:
+ * - % e colunas de taxa => média simples
+ * - CPC / Ticket / Médio => média simples
+ * - demais numéricos => soma
+ */
+function aggModeForCol(col){
+  const c = String(col || "");
+  const lc = c.toLowerCase();
+  if (PERCENT_COLS.has(c)) return "avg";
+  if (lc.includes("taxa") || lc.includes("convers") || lc.includes("ctr")) return "avg";
+  if (lc.includes("cpc") || lc.includes("ticket") || lc.includes("médio") || lc.includes("medio")) return "avg";
+  return "sum";
+}
+
+function isNumericVal(v){
+  const n = toNumber(v);
+  return n !== null;
+}
+
+function computeAggFromRows(rows){
+  if (!rows || !rows.length) return { row: null, cols: [] };
+
+  // pega conjunto de colunas (exclui possíveis chaves internas)
+  const first = rows.find(r => r && typeof r === "object") || rows[0];
+  const cols = Object.keys(first).filter(c => c !== "__month");
+
+  const sums = {};
+  const counts = {};
+  const out = {};
+
+  for (const col of cols) {
+    if (col === "Mês") continue;
+    sums[col] = 0;
+    counts[col] = 0;
+  }
+
+  for (const r of rows) {
+    if (!r || typeof r !== "object") continue;
+    for (const col of cols) {
+      if (col === "Mês") continue;
+      const v = r[col];
+      const n = toNumber(v);
+      if (n === null) continue;
+      sums[col] += n;
+      counts[col] += 1;
+    }
+  }
+
+  for (const col of cols) {
+    if (col === "Mês") continue;
+
+    if (counts[col] === 0) continue;
+
+    const mode = aggModeForCol(col);
+    out[col] = (mode === "avg") ? (sums[col] / counts[col]) : sums[col];
+  }
+
+  return { row: out, cols };
+}
+
+/**
+ * Baixa um mês e agrega (sem guardar todas as linhas em memória pra sempre)
+ */
+async function fetchAndAggregateMonth(bu, month){
+  const buMap = (manifestCache.files && manifestCache.files[bu]) ? manifestCache.files[bu] : {};
+  const parts = buMap[month] || [];
+  if (!parts.length) return null;
+
+  let allRows = [];
+  for (let i=0;i<parts.length;i++){
+    const url = (function(part){
+      let filePath = String(part.file || "").replace(/^\/+/, "");
+      const needsPrefix =
+        !(filePath.startsWith("imoveis/") || filePath.startsWith("carbuy/") || filePath.startsWith("veiculos/"));
+
+      return needsPrefix
+        ? `data/${bu}/${filePath}`
+        : `data/${filePath}`;
+    })(parts[i]);
+
+    const rows = await fetchJson(url);
+    allRows = allRows.concat(rows);
+  }
+
+  const { row } = computeAggFromRows(allRows);
+  return row || null;
+}
+
+function pickScoreColumn(consolidatedRows){
+  if (!consolidatedRows || !consolidatedRows.length) return null;
+  const sample = consolidatedRows[0];
+  const preferred = ["Vendas","Faturamento","Receita","Leads","CAD"];
+  for (const p of preferred) if (p in sample) return p;
+
+  // fallback: primeiro numérico
+  const keys = Object.keys(sample).filter(k => k !== "Mês");
+  for (const k of keys){
+    if (isNumericVal(sample[k])) return k;
+  }
+  return null;
+}
+
+function setMini(idVal, idSub, valueText, subText){
+  document.getElementById(idVal).textContent = valueText || "—";
+  document.getElementById(idSub).textContent = subText || "—";
+}
+
+function renderLegend(series){
+  const el = document.getElementById("chartLegend");
+  el.innerHTML = "";
+  series.forEach(s => {
+    const d = document.createElement("div");
+    d.style.display = "flex";
+    d.style.alignItems = "center";
+    d.style.gap = "6px";
+    d.style.color = s.color;
+    d.innerHTML = `<span class="lg-dot"></span>${s.name}`;
+    el.appendChild(d);
+  });
+}
+
+/**
+ * Gráfico SVG simples (linhas) sem libs
+ */
+function renderLineChartSVG(labels, series){
+  const W = 920, H = 240;
+  const padL = 42, padR = 16, padT = 10, padB = 34;
+  const iw = W - padL - padR;
+  const ih = H - padT - padB;
+
+  // define domínio Y: pega max global entre séries
+  let maxY = 0;
+  for (const s of series){
+    for (const v of s.values){
+      const n = toNumber(v);
+      if (n !== null) maxY = Math.max(maxY, n);
+    }
+  }
+  if (maxY <= 0) maxY = 1;
+
+  const xFor = (i) => padL + (labels.length <= 1 ? 0 : (i * (iw / (labels.length - 1))));
+  const yFor = (v) => {
+    const n = toNumber(v) ?? 0;
+    const t = n / maxY;
+    return padT + (ih * (1 - t));
+  };
+
+  const gridLines = 4;
+  let grid = "";
+  for (let i=0;i<=gridLines;i++){
+    const y = padT + (ih * (i/gridLines));
+    grid += `<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="rgba(255,255,255,.10)" />`;
+  }
+
+  // X labels
+  let xLabels = "";
+  labels.forEach((lb, i) => {
+    const x = xFor(i);
+    const t = lb.length > 5 ? lb.slice(0,5) : lb;
+    xLabels += `<text x="${x}" y="${H-12}" fill="rgba(255,255,255,.75)" font-size="11" text-anchor="middle">${t}</text>`;
+  });
+
+  // series paths
+  let paths = "";
+  series.forEach(s => {
+    const pts = s.values.map((v,i) => `${xFor(i)},${yFor(v)}`).join(" ");
+    // path
+    let d = "";
+    s.values.forEach((v,i) => {
+      const x = xFor(i), y = yFor(v);
+      d += (i===0 ? `M ${x} ${y}` : ` L ${x} ${y}`);
+    });
+
+    paths += `
+      <path d="${d}" fill="none" stroke="${s.color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+      ${s.values.map((v,i)=> {
+        const x = xFor(i), y = yFor(v);
+        return `<circle cx="${x}" cy="${y}" r="3.5" fill="${s.color}" />`;
+      }).join("")}
+    `;
+  });
+
+  const svg = `
+    <svg viewBox="0 0 ${W} ${H}" width="100%" height="240" role="img" aria-label="Gráfico de evolução mensal">
+      ${grid}
+      <line x1="${padL}" y1="${H-padB}" x2="${W-padR}" y2="${H-padB}" stroke="rgba(255,255,255,.16)" />
+      <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${H-padB}" stroke="rgba(255,255,255,.16)" />
+      ${paths}
+      ${xLabels}
+    </svg>
+  `;
+
+  const box = document.getElementById("chartBox");
+  box.innerHTML = svg;
+}
+
+async function loadSelectionConsolidated() {
+  if (!manifestCache) return;
+
+  document.getElementById("consolidatedWrap").style.display = "block";
+  document.getElementById("consolidatedStatus").textContent = "Montando consolidado…";
+
+  // quais meses entram?
+  let months = (manifestCache.months || []).slice();
+  if (!months.length){
+    showEmpty("Sem meses disponíveis no manifest.");
+    return;
+  }
+
+  if (currentMonth !== "ALL") {
+    months = months.filter(m => m === currentMonth);
+  }
+
+  // montar linhas consolidadas
+  const consolidated = [];
+  for (let i=0;i<months.length;i++){
+    const m = months[i];
+    document.getElementById("consolidatedStatus").textContent =
+      `Consolidando ${monthLabel(m)} (${i+1}/${months.length})…`;
+
+    const agg = await fetchAndAggregateMonth(currentBU, m);
+    if (!agg) continue;
+
+    consolidated.push({ "Mês": monthLabel(m), ...agg, "__month": m });
+  }
+
+  if (!consolidated.length){
+    showEmpty("Sem dados para consolidar.");
+    document.getElementById("consolidatedStatus").textContent = "Sem dados.";
+    setMini("bestMonthVal","bestMonthSub","—","—");
+    setMini("worstMonthVal","worstMonthSub","—","—");
+    setMini("growthVal","growthSub","—","—");
+    document.getElementById("chartLegend").innerHTML = "";
+    document.getElementById("chartBox").innerHTML = "";
+    return;
+  }
+
+  // Ordena por __month (yyyy-mm)
+  consolidated.sort((a,b)=> String(a.__month).localeCompare(String(b.__month)));
+
+  // Cards (best/worst/growth) baseado em uma métrica principal
+  const scoreCol = pickScoreColumn(consolidated);
+  if (scoreCol) {
+    let best = consolidated[0], worst = consolidated[0];
+    for (const r of consolidated){
+      const n = toNumber(r[scoreCol]);
+      if (n === null) continue;
+      if (toNumber(best[scoreCol]) === null || n > toNumber(best[scoreCol])) best = r;
+      if (toNumber(worst[scoreCol]) === null || n < toNumber(worst[scoreCol])) worst = r;
+    }
+
+    setMini("bestMonthVal","bestMonthSub", best["Mês"], `${scoreCol}: ${formatCell(scoreCol, best[scoreCol])}`);
+    setMini("worstMonthVal","worstMonthSub", worst["Mês"], `${scoreCol}: ${formatCell(scoreCol, worst[scoreCol])}`);
+
+    // crescimento vs mês anterior (último vs penúltimo)
+    if (consolidated.length >= 2) {
+      const last = consolidated[consolidated.length - 1];
+      const prev = consolidated[consolidated.length - 2];
+      const a = toNumber(prev[scoreCol]);
+      const b = toNumber(last[scoreCol]);
+      if (a !== null && b !== null && a !== 0) {
+        const g = ((b - a) / Math.abs(a)) * 100;
+        setMini("growthVal","growthSub", formatPercentSmart(g), `Base: ${scoreCol} (${prev["Mês"]} → ${last["Mês"]})`);
+      } else {
+        setMini("growthVal","growthSub","—", `Base: ${scoreCol}`);
+      }
+    } else {
+      setMini("growthVal","growthSub","—", `Base: ${scoreCol}`);
+    }
+  } else {
+    setMini("bestMonthVal","bestMonthSub","—","Sem métrica numérica");
+    setMini("worstMonthVal","worstMonthSub","—","Sem métrica numérica");
+    setMini("growthVal","growthSub","—","Sem métrica numérica");
+  }
+
+  // Gráfico (tenta o padrão: Leads, Vendas, Conversão, Receita)
+  const labels = consolidated.map(r => r["Mês"]);
+  const wants = [
+    { key:"Leads", name:"Leads", color:"#4ea3ff" },
+    { key:"Vendas", name:"Vendas", color:"#55e37b" },
+    { key:"Conversão", name:"Conversão", color:"#ffb14e" },
+    { key:"Receita", name:"Receita", color:"#ffd34e" },
+  ];
+
+  // filtra séries que existem
+  let series = wants
+    .filter(w => consolidated.some(r => r[w.key] !== undefined && r[w.key] !== null))
+    .map(w => ({ name: w.name, color: w.color, values: consolidated.map(r => toNumber(r[w.key]) ?? 0) }));
+
+  // fallback: pega 3 primeiras numéricas se não tiver nenhuma das padrão
+  if (!series.length){
+    const sample = consolidated[0];
+    const keys = Object.keys(sample).filter(k => k !== "Mês" && k !== "__month");
+    const numericKeys = keys.filter(k => consolidated.some(r => isNumericVal(r[k]))).slice(0,3);
+    series = numericKeys.map((k, idx) => {
+      const palette = ["#4ea3ff","#55e37b","#ffb14e"];
+      return { name:k, color: palette[idx] || "#ffffff", values: consolidated.map(r => toNumber(r[k]) ?? 0) };
+    });
+  }
+
+  renderLegend(series);
+  renderLineChartSVG(labels, series);
+
+  // Render tabela consolidada (sem controles de paginação/download)
+  const tableRows = consolidated.map(r => {
+    const copy = {...r};
+    delete copy.__month;
+    return copy;
+  });
+
+  renderTableWithRows(tableRows, { emptyMsg: "Sem dados consolidados." });
+
+  document.getElementById("consolidatedStatus").textContent =
+    `Consolidado pronto: ${currentBU.toUpperCase()} • ${currentMonth === "ALL" ? "Todos os meses" : monthLabel(currentMonth)}`;
+}
+
+/* =========================
+   UI / NAV
+   ========================= */
 function populateUIFromManifest(manifest) {
   const sel = document.getElementById("monthFilter");
   const keep = sel.value || "ALL";
@@ -389,7 +893,7 @@ function populateUIFromManifest(manifest) {
   (manifest.months || []).forEach(m => {
     const o = document.createElement("option");
     o.value = m;
-    o.textContent = (m.length === 7) ? `${m.slice(5)}/${m.slice(0,4)}` : m;
+    o.textContent = monthLabel(m);
     sel.appendChild(o);
   });
 
@@ -404,20 +908,44 @@ function populateUIFromManifest(manifest) {
   `;
 }
 
+function setTab(view){
+  currentView = view;
+
+  const tDaily = document.getElementById("tabDaily");
+  const tCons = document.getElementById("tabConsolidated");
+  tDaily.classList.toggle("active", view === "daily");
+  tCons.classList.toggle("active", view === "consolidated");
+
+  // recarrega a visão atual com o estado do filtro
+  refreshCurrentView();
+}
+
+async function refreshCurrentView(){
+  if (!manifestCache) return;
+
+  if (currentView === "daily") {
+    await loadSelectionDaily();
+  } else {
+    // consolidado não precisa do estado de "loadedRows" diário
+    showEmpty("Carregando consolidado…");
+    await loadSelectionConsolidated();
+  }
+}
+
 function wireEvents() {
   document.querySelectorAll(".nav-btn").forEach(btn => {
     btn.addEventListener("click", async () => {
       document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
       btn.classList.add("active");
       currentBU = btn.dataset.bu;
-      await loadSelection();
+      await refreshCurrentView();
     });
   });
 
   const monthFilter = document.getElementById("monthFilter");
   monthFilter.addEventListener("change", async () => {
     currentMonth = monthFilter.value;
-    await loadSelection();
+    await refreshCurrentView();
   });
 
   document.getElementById("btnToggleSidebar").addEventListener("click", () => {
@@ -434,6 +962,10 @@ function wireEvents() {
     const el = document.getElementById("pwd");
     el.type = (el.type === "password") ? "text" : "password";
   });
+
+  // tabs
+  document.getElementById("tabDaily").addEventListener("click", () => setTab("daily"));
+  document.getElementById("tabConsolidated").addEventListener("click", () => setTab("consolidated"));
 }
 
 async function bootApp() {
@@ -451,7 +983,7 @@ async function bootApp() {
   const sel = document.getElementById("monthFilter");
   currentMonth = sel.value || "ALL";
 
-  await loadSelection();
+  await refreshCurrentView();
 }
 
 /* =========================
