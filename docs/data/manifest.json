@@ -1,8 +1,9 @@
 {
-  "generated_at": "06/02/2026 10:38",
+  "generated_at": "12/02/2026 16:47",
   "source": "TABELÃO_v1.0.xlsx",
   "months": [
-    "2026-01"
+    "2026-01",
+    "2026-02"
   ],
   "files": {
     "imoveis": {
@@ -10,6 +11,12 @@
         {
           "file": "2026-01_part1.json",
           "rows": 27
+        }
+      ],
+      "2026-02": [
+        {
+          "file": "2026-02_part1.json",
+          "rows": 24
         }
       ]
     },
@@ -19,6 +26,12 @@
           "file": "2026-01_part1.json",
           "rows": 27
         }
+      ],
+      "2026-02": [
+        {
+          "file": "2026-02_part1.json",
+          "rows": 24
+        }
       ]
     },
     "veiculos": {
@@ -26,6 +39,12 @@
         {
           "file": "2026-01_part1.json",
           "rows": 27
+        }
+      ],
+      "2026-02": [
+        {
+          "file": "2026-02_part1.json",
+          "rows": 24
         }
       ]
     }

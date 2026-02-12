@@ -6,7 +6,7 @@
   <title>GRUPO VPL</title>
   <link rel="stylesheet" href="assets/style.css">
 
-  <!-- CSS extra só pra abas + consolidado (sem mexer no style.css) -->
+  <!-- CSS extra só pra abas + consolidado (sem depender do style.css) -->
   <style>
     .tabsbar{
       display:flex; gap:10px; align-items:center; justify-content:center;
@@ -19,10 +19,11 @@
       padding:10px 16px;
       border-radius: 999px;
       cursor:pointer;
-      font-weight: 700;
+      font-weight: 800;
       letter-spacing:.2px;
       transition: transform .08s ease, background .15s ease;
       user-select:none;
+      white-space: nowrap;
     }
     .tab-btn:hover{ transform: translateY(-1px); }
     .tab-btn.active{
@@ -75,23 +76,43 @@
       border-radius: 14px;
       padding: 12px;
       overflow:hidden;
+      position: relative;
     }
     .chart-title{
-      font-weight: 900;
+      font-weight: 950;
       margin: 0 0 8px 0;
       font-size: 14px;
       opacity:.95;
     }
+
+    /* Chips scrolláveis (melhor UX) */
     .chart-legend{
-      display:flex; flex-wrap:wrap; gap:10px;
-      font-size: 12px;
-      opacity: .85;
-      margin-bottom: 8px;
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding: 4px 0 10px 0;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
     }
-    .lg-dot{ display:inline-block; width:10px; height:10px; border-radius:999px; background: currentColor; margin-right:6px; }
-    .muted2{ opacity:.7; }
+    .chart-legend::-webkit-scrollbar{ height: 0; }
+
     .loading-inline{
       font-size:12px; opacity:.8; margin-top:8px;
+    }
+    .muted2{ opacity:.7; }
+
+    /* destaque no header clicável */
+    .data-table thead th.metric-selected{
+      outline: 2px solid rgba(255,255,255,.22);
+      outline-offset: -2px;
+      border-radius: 10px;
+    }
+
+    @media (max-width: 980px){
+      .consolidated-grid{ grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -156,11 +177,13 @@
     <main class="content">
       <div class="topbar">
         <button id="btnToggleSidebar" class="menu-btn" type="button" title="Ocultar/mostrar menu">☰</button>
-        <div>
+        <div style="flex:1;">
           <div class="title">DashBoard MKT Team</div>
           <div class="subtitle" id="sourceSubtitle">Fonte: —</div>
         </div>
-        <div class="tabsbar">
+
+        <!-- Abas (fora do flow do título) -->
+        <div class="tabsbar" style="padding:0;">
           <button id="tabDaily" class="tab-btn active" type="button">VISÃO DIÁRIA</button>
           <button id="tabConsolidated" class="tab-btn" type="button">CONSOLIDADO</button>
         </div>
@@ -172,7 +195,7 @@
         <div id="consolidatedWrap" class="consolidated-wrap">
           <div class="consolidated-grid">
             <div class="chart-card">
-              <div class="chart-title">Evolução Mensal</div>
+              <div class="chart-title" id="chartTitle">Evolução Mensal</div>
               <div class="chart-legend" id="chartLegend"></div>
               <div id="chartBox"></div>
               <div class="loading-inline muted2" id="consolidatedStatus"></div>
@@ -222,9 +245,9 @@
 
 <script>
 /* =========================
-   CONFIG (FÁCIL DE TROCAR)
+   CONFIG
    ========================= */
-const SENHA_PADRAO = "42779103353"; // <-- TROQUE AQUI QUANDO QUISER
+const SENHA_PADRAO = "42779103353";
 const AUTH_KEY = "tabelao_auth_ok_v1";
 const MANIFEST_URL = "data/manifest.json";
 const PAGE_CHUNK_RENDER = 200;
@@ -256,34 +279,17 @@ async function fetchJson(url) {
   return await res.json();
 }
 
-function clamp(n, a, b){ return Math.max(a, Math.min(b, n)); }
-
 /* =========================
    FORMATAÇÃO (R$ / %)
    ========================= */
-
-// dinheiro (R$)
 const MONEY_COLS = new Set([
-  "R$ Estoque",
-  "Faturamento",
-  "CPC",
-  "CPC (R$)",
-  "CPC R$",
-  "Receita",
-  "Receita (R$)",
-  "Investimento",
-  "Gasto",
-  "Spend"
+  "R$ Estoque","Faturamento","CPC","CPC (R$)","CPC R$",
+  "Receita","Receita (R$)","Investimento","Gasto","Spend"
 ]);
 
-// percentual (%)
 const PERCENT_COLS = new Set([
-  "CTR",
-  "CTR (%)",
-  "CTR %",
-  "Conversão",
-  "Conversão (%)",
-  "Taxa de Conversão",
+  "CTR","CTR (%)","CTR %",
+  "Conversão","Conversão (%)","Taxa de Conversão",
   "Eficiência"
 ]);
 
@@ -294,18 +300,12 @@ function toNumber(v) {
   if (typeof v === "string") {
     let s = v.trim();
     if (!s) return null;
-
-    s = s.replace(/\s/g, "")
-         .replace("R$", "")
-         .replace("%", "");
-
-    // pt-BR: 1.234,56
+    s = s.replace(/\s/g, "").replace("R$", "").replace("%", "");
     if (s.includes(",")) {
       s = s.replace(/\./g, "").replace(",", ".");
       const n = Number(s);
       return Number.isFinite(n) ? n : null;
     }
-
     const n = Number(s);
     return Number.isFinite(n) ? n : null;
   }
@@ -315,8 +315,6 @@ function toNumber(v) {
 }
 
 function formatPercentSmart(n) {
-  // aceita 0.1234 => 12,34%
-  // aceita 12.34 => 12,34%
   const pct = (n >= 0 && n <= 1) ? n * 100 : n;
   return pct.toLocaleString("pt-BR", { maximumFractionDigits: 2, minimumFractionDigits: 2 }) + "%";
 }
@@ -324,34 +322,30 @@ function formatPercentSmart(n) {
 function formatCell(col, v) {
   if (v === null || v === undefined) return "";
 
-  // dinheiro
   if (MONEY_COLS.has(col)) {
     const n = toNumber(v);
     if (n === null) return String(v);
     return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
   }
 
-  // percentual
   if (PERCENT_COLS.has(col)) {
     const n = toNumber(v);
     if (n === null) return String(v);
     return formatPercentSmart(n);
   }
 
-  // estoque (quantidade)
   if (col === "Estoque") {
     const n = toNumber(v);
     if (n === null) return String(v);
     return Math.round(n).toLocaleString("pt-BR");
   }
 
-  // números gerais
   if (typeof v === "number") return v.toLocaleString("pt-BR");
   return String(v);
 }
 
 /* =========================
-   LOGIN (OFUSCADO)
+   LOGIN
    ========================= */
 function isAuthed() {
   return localStorage.getItem(AUTH_KEY) === "1";
@@ -382,12 +376,12 @@ function doLogout() {
 }
 
 /* =========================
-   APP (MANIFEST + PARTES)
+   APP STATE
    ========================= */
 let manifestCache = null;
 let currentBU = "imoveis";
-let currentMonth = "ALL";
-let currentView = "daily"; // daily | consolidated
+let currentMonth = "ALL";       // ALL | yyyy-mm
+let currentView = "daily";      // daily | consolidated
 
 let loadedRows = [];
 let partsForSelection = [];
@@ -404,19 +398,14 @@ function resetState() {
 function monthLabel(yyyyMM){
   if (!yyyyMM) return "—";
   if (yyyyMM.length !== 7) return yyyyMM;
-
   const mesNum = yyyyMM.slice(5,7);
-  const ano = yyyyMM.slice(0,4);
-
   const meses = {
     "01":"Jan","02":"Fev","03":"Mar","04":"Abr",
     "05":"Mai","06":"Jun","07":"Jul","08":"Ago",
     "09":"Set","10":"Out","11":"Nov","12":"Dez"
   };
-
   return meses[mesNum] || mesNum;
 }
-
 
 function resolveMonth(manifest) {
   if (currentMonth !== "ALL") return currentMonth;
@@ -435,7 +424,7 @@ function buildPartsUrl(part) {
 }
 
 /* =========================
-   TABLE RENDER (genérico)
+   TABLE RENDER
    ========================= */
 function renderTableWithRows(rows, opts={}) {
   const thead = document.getElementById("thead");
@@ -502,7 +491,7 @@ function renderTableWithRows(rows, opts={}) {
 }
 
 /* =========================
-   VISÃO DIÁRIA (como antes)
+   VISÃO DIÁRIA
    ========================= */
 async function downloadNextPart() {
   if (nextPartIndex >= partsForSelection.length) return;
@@ -513,8 +502,6 @@ async function downloadNextPart() {
   showEmpty(`Baixando parte ${nextPartIndex}/${partsForSelection.length}…`);
 
   const url = buildPartsUrl(part);
-  console.log("FETCH:", url);
-
   const rows = await fetchJson(url);
   loadedRows = loadedRows.concat(rows);
 
@@ -557,15 +544,8 @@ function renderDaily() {
 }
 
 /* =========================
-   CONSOLIDADO (mês fechado)
+   CONSOLIDADO (AGREGAÇÃO)
    ========================= */
-
-/**
- * Heurística de agregação:
- * - % e colunas de taxa => média simples
- * - CPC / Ticket / Médio => média simples
- * - demais numéricos => soma
- */
 function aggModeForCol(col){
   const c = String(col || "");
   const lc = c.toLowerCase();
@@ -575,15 +555,9 @@ function aggModeForCol(col){
   return "sum";
 }
 
-function isNumericVal(v){
-  const n = toNumber(v);
-  return n !== null;
-}
-
 function computeAggFromRows(rows){
   if (!rows || !rows.length) return { row: null, cols: [] };
 
-  // pega conjunto de colunas (exclui possíveis chaves internas)
   const first = rows.find(r => r && typeof r === "object") || rows[0];
   const cols = Object.keys(first).filter(c => c !== "__month");
 
@@ -601,8 +575,7 @@ function computeAggFromRows(rows){
     if (!r || typeof r !== "object") continue;
     for (const col of cols) {
       if (col === "Mês") continue;
-      const v = r[col];
-      const n = toNumber(v);
+      const n = toNumber(r[col]);
       if (n === null) continue;
       sums[col] += n;
       counts[col] += 1;
@@ -611,9 +584,7 @@ function computeAggFromRows(rows){
 
   for (const col of cols) {
     if (col === "Mês") continue;
-
     if (counts[col] === 0) continue;
-
     const mode = aggModeForCol(col);
     out[col] = (mode === "avg") ? (sums[col] / counts[col]) : sums[col];
   }
@@ -621,9 +592,6 @@ function computeAggFromRows(rows){
   return { row: out, cols };
 }
 
-/**
- * Baixa um mês e agrega (sem guardar todas as linhas em memória pra sempre)
- */
 async function fetchAndAggregateMonth(bu, month){
   const buMap = (manifestCache.files && manifestCache.files[bu]) ? manifestCache.files[bu] : {};
   const parts = buMap[month] || [];
@@ -631,16 +599,11 @@ async function fetchAndAggregateMonth(bu, month){
 
   let allRows = [];
   for (let i=0;i<parts.length;i++){
-    const url = (function(part){
-      let filePath = String(part.file || "").replace(/^\/+/, "");
-      const needsPrefix =
-        !(filePath.startsWith("imoveis/") || filePath.startsWith("carbuy/") || filePath.startsWith("veiculos/"));
+    let filePath = String(parts[i].file || "").replace(/^\/+/, "");
+    const needsPrefix =
+      !(filePath.startsWith("imoveis/") || filePath.startsWith("carbuy/") || filePath.startsWith("veiculos/"));
 
-      return needsPrefix
-        ? `data/${bu}/${filePath}`
-        : `data/${filePath}`;
-    })(parts[i]);
-
+    const url = needsPrefix ? `data/${bu}/${filePath}` : `data/${filePath}`;
     const rows = await fetchJson(url);
     allRows = allRows.concat(rows);
   }
@@ -649,49 +612,15 @@ async function fetchAndAggregateMonth(bu, month){
   return row || null;
 }
 
-function pickScoreColumn(consolidatedRows){
-  if (!consolidatedRows || !consolidatedRows.length) return null;
-  const sample = consolidatedRows[0];
-  const preferred = ["Vendas","Faturamento","Receita","Leads","CAD"];
-  for (const p of preferred) if (p in sample) return p;
-
-  // fallback: primeiro numérico
-  const keys = Object.keys(sample).filter(k => k !== "Mês");
-  for (const k of keys){
-    if (isNumericVal(sample[k])) return k;
-  }
-  return null;
-}
-
-function setMini(idVal, idSub, valueText, subText){
-  document.getElementById(idVal).textContent = valueText || "—";
-  document.getElementById(idSub).textContent = subText || "—";
-}
-
-function renderLegend(series){
-  const el = document.getElementById("chartLegend");
-  el.innerHTML = "";
-  series.forEach(s => {
-    const d = document.createElement("div");
-    d.style.display = "flex";
-    d.style.alignItems = "center";
-    d.style.gap = "6px";
-    d.style.color = s.color;
-    d.innerHTML = `<span class="lg-dot"></span>${s.name}`;
-    el.appendChild(d);
-  });
-}
-
-/**
- * Gráfico SVG simples (linhas) sem libs
- */
+/* =========================
+   CHART (SVG)
+   ========================= */
 function renderLineChartSVG(labels, series){
   const W = 920, H = 240;
   const padL = 42, padR = 16, padT = 10, padB = 34;
   const iw = W - padL - padR;
   const ih = H - padT - padB;
 
-  // define domínio Y: pega max global entre séries
   let maxY = 0;
   for (const s of series){
     for (const v of s.values){
@@ -715,7 +644,6 @@ function renderLineChartSVG(labels, series){
     grid += `<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="rgba(255,255,255,.10)" />`;
   }
 
-  // X labels
   let xLabels = "";
   labels.forEach((lb, i) => {
     const x = xFor(i);
@@ -723,11 +651,8 @@ function renderLineChartSVG(labels, series){
     xLabels += `<text x="${x}" y="${H-12}" fill="rgba(255,255,255,.75)" font-size="11" text-anchor="middle">${t}</text>`;
   });
 
-  // series paths
   let paths = "";
   series.forEach(s => {
-    const pts = s.values.map((v,i) => `${xFor(i)},${yFor(v)}`).join(" ");
-    // path
     let d = "";
     s.values.forEach((v,i) => {
       const x = xFor(i), y = yFor(v);
@@ -753,28 +678,164 @@ function renderLineChartSVG(labels, series){
     </svg>
   `;
 
-  const box = document.getElementById("chartBox");
-  box.innerHTML = svg;
+  document.getElementById("chartBox").innerHTML = svg;
 }
 
+/* =========================================================
+   CONSOLIDADO INTERATIVO (métrica clicável)
+   ========================================================= */
+const CONSOLIDATED_METRICS = [
+  "Vendas","Vendas M-0","Estoque","Eficiência","R$ Estoque","Faturamento",
+  "Cli Lanc M0","Cli Compr M0","Lances","Cad Enc","Cad Aut","Envios","Entrega",
+  "Leitura","Clique","Alcance","CPC","CTR","Seguidores"
+];
+
+let consolidatedCache = [];
+let selectedMetricName = "Vendas";
+
+function getAvailableMetricsFromData(rows){
+  if (!rows || !rows.length) return [];
+  const sample = rows[0] || {};
+
+  const preferred = CONSOLIDATED_METRICS.filter(m => Object.prototype.hasOwnProperty.call(sample, m));
+  const extras = Object.keys(sample)
+    .filter(k => k !== "Mês" && k !== "__month" && !preferred.includes(k))
+    .filter(k => rows.some(r => toNumber(r[k]) !== null));
+
+  return preferred.concat(extras);
+}
+
+function setMini(idVal, idSub, valueText, subText){
+  document.getElementById(idVal).textContent = valueText || "—";
+  document.getElementById(idSub).textContent = subText || "—";
+}
+
+function setSelectedMetric(metric){
+  if (!metric) return;
+  selectedMetricName = metric;
+  updateConsolidatedUI();
+}
+
+function renderMetricSelector(metrics){
+  const el = document.getElementById("chartLegend");
+  el.innerHTML = "";
+
+  metrics.forEach(m => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = m;
+    b.className = "tab-btn" + (m === selectedMetricName ? " active" : "");
+    b.style.padding = "8px 12px";
+    b.style.fontWeight = "900";
+    b.addEventListener("click", () => setSelectedMetric(m));
+    el.appendChild(b);
+  });
+}
+
+function updateMiniCardsByMetric(metric){
+  const rows = consolidatedCache;
+  if (!rows || !rows.length) return;
+
+  let best = null, worst = null;
+
+  for (const r of rows){
+    const n = toNumber(r[metric]);
+    if (n === null) continue;
+    if (!best || n > (toNumber(best[metric]) ?? -Infinity)) best = r;
+    if (!worst || n < (toNumber(worst[metric]) ?? Infinity)) worst = r;
+  }
+
+  setMini("bestMonthVal","bestMonthSub",
+    best ? best["Mês"] : "—",
+    best ? `${metric}: ${formatCell(metric, best[metric])}` : `Base: ${metric}`
+  );
+
+  setMini("worstMonthVal","worstMonthSub",
+    worst ? worst["Mês"] : "—",
+    worst ? `${metric}: ${formatCell(metric, worst[metric])}` : `Base: ${metric}`
+  );
+
+  if (rows.length >= 2) {
+    const last = rows[rows.length - 1];
+    const prev = rows[rows.length - 2];
+    const a = toNumber(prev[metric]);
+    const b = toNumber(last[metric]);
+
+    if (a !== null && b !== null && a !== 0) {
+      const g = ((b - a) / Math.abs(a)) * 100;
+      setMini("growthVal","growthSub", formatPercentSmart(g), `Base: ${metric} (${prev["Mês"]} → ${last["Mês"]})`);
+    } else if (a !== null && b !== null) {
+      setMini("growthVal","growthSub", formatCell(metric, (b - a)), `Base: ${metric} (${prev["Mês"]} → ${last["Mês"]})`);
+    } else {
+      setMini("growthVal","growthSub","—", `Base: ${metric}`);
+    }
+  } else {
+    setMini("growthVal","growthSub","—", `Base: ${metric}`);
+  }
+}
+
+function updateConsolidatedChartByMetric(metric){
+  const labels = consolidatedCache.map(r => r["Mês"]);
+  const values = consolidatedCache.map(r => toNumber(r[metric]) ?? 0);
+  renderLineChartSVG(labels, [{ name: metric, color: "#55e37b", values }]);
+}
+
+function wireHeaderClicks(metrics){
+  const thead = document.getElementById("thead");
+  if (!thead) return;
+
+  thead.querySelectorAll("th").forEach(th => {
+    const name = (th.textContent || "").trim();
+    const ok = metrics.includes(name);
+
+    th.onclick = null;
+    th.classList.remove("metric-selected");
+    th.style.cursor = "";
+    th.style.userSelect = "";
+
+    if (!ok) return;
+
+    th.style.cursor = "pointer";
+    th.style.userSelect = "none";
+    if (name === selectedMetricName) th.classList.add("metric-selected");
+    th.onclick = () => setSelectedMetric(name);
+  });
+}
+
+function updateConsolidatedUI(){
+  if (!consolidatedCache || !consolidatedCache.length) return;
+
+  const available = getAvailableMetricsFromData(consolidatedCache);
+  if (!available.length) return;
+
+  if (!available.includes(selectedMetricName)) selectedMetricName = available[0];
+
+  const t = document.getElementById("chartTitle");
+  if (t) t.textContent = `Evolução Mensal • ${selectedMetricName}`;
+
+  renderMetricSelector(available);
+  updateConsolidatedChartByMetric(selectedMetricName);
+  updateMiniCardsByMetric(selectedMetricName);
+  wireHeaderClicks(available);
+}
+
+/* =========================
+   CONSOLIDADO - LOAD
+   ========================= */
 async function loadSelectionConsolidated() {
   if (!manifestCache) return;
 
   document.getElementById("consolidatedWrap").style.display = "block";
   document.getElementById("consolidatedStatus").textContent = "Montando consolidado…";
 
-  // quais meses entram?
   let months = (manifestCache.months || []).slice();
   if (!months.length){
     showEmpty("Sem meses disponíveis no manifest.");
     return;
   }
 
-  if (currentMonth !== "ALL") {
-    months = months.filter(m => m === currentMonth);
-  }
+  if (currentMonth !== "ALL") months = months.filter(m => m === currentMonth);
 
-  // montar linhas consolidadas
   const consolidated = [];
   for (let i=0;i<months.length;i++){
     const m = months[i];
@@ -798,73 +859,12 @@ async function loadSelectionConsolidated() {
     return;
   }
 
-  // Ordena por __month (yyyy-mm)
   consolidated.sort((a,b)=> String(a.__month).localeCompare(String(b.__month)));
+  consolidatedCache = consolidated;
 
-  // Cards (best/worst/growth) baseado em uma métrica principal
-  const scoreCol = pickScoreColumn(consolidated);
-  if (scoreCol) {
-    let best = consolidated[0], worst = consolidated[0];
-    for (const r of consolidated){
-      const n = toNumber(r[scoreCol]);
-      if (n === null) continue;
-      if (toNumber(best[scoreCol]) === null || n > toNumber(best[scoreCol])) best = r;
-      if (toNumber(worst[scoreCol]) === null || n < toNumber(worst[scoreCol])) worst = r;
-    }
+  const available = getAvailableMetricsFromData(consolidatedCache);
+  selectedMetricName = available.includes("Vendas") ? "Vendas" : (available[0] || "Vendas");
 
-    setMini("bestMonthVal","bestMonthSub", best["Mês"], `${scoreCol}: ${formatCell(scoreCol, best[scoreCol])}`);
-    setMini("worstMonthVal","worstMonthSub", worst["Mês"], `${scoreCol}: ${formatCell(scoreCol, worst[scoreCol])}`);
-
-    // crescimento vs mês anterior (último vs penúltimo)
-    if (consolidated.length >= 2) {
-      const last = consolidated[consolidated.length - 1];
-      const prev = consolidated[consolidated.length - 2];
-      const a = toNumber(prev[scoreCol]);
-      const b = toNumber(last[scoreCol]);
-      if (a !== null && b !== null && a !== 0) {
-        const g = ((b - a) / Math.abs(a)) * 100;
-        setMini("growthVal","growthSub", formatPercentSmart(g), `Base: ${scoreCol} (${prev["Mês"]} → ${last["Mês"]})`);
-      } else {
-        setMini("growthVal","growthSub","—", `Base: ${scoreCol}`);
-      }
-    } else {
-      setMini("growthVal","growthSub","—", `Base: ${scoreCol}`);
-    }
-  } else {
-    setMini("bestMonthVal","bestMonthSub","—","Sem métrica numérica");
-    setMini("worstMonthVal","worstMonthSub","—","Sem métrica numérica");
-    setMini("growthVal","growthSub","—","Sem métrica numérica");
-  }
-
-  // Gráfico (tenta o padrão: Leads, Vendas, Conversão, Receita)
-  const labels = consolidated.map(r => r["Mês"]);
-  const wants = [
-    { key:"Leads", name:"Leads", color:"#4ea3ff" },
-    { key:"Vendas", name:"Vendas", color:"#55e37b" },
-    { key:"Conversão", name:"Conversão", color:"#ffb14e" },
-    { key:"Receita", name:"Receita", color:"#ffd34e" },
-  ];
-
-  // filtra séries que existem
-  let series = wants
-    .filter(w => consolidated.some(r => r[w.key] !== undefined && r[w.key] !== null))
-    .map(w => ({ name: w.name, color: w.color, values: consolidated.map(r => toNumber(r[w.key]) ?? 0) }));
-
-  // fallback: pega 3 primeiras numéricas se não tiver nenhuma das padrão
-  if (!series.length){
-    const sample = consolidated[0];
-    const keys = Object.keys(sample).filter(k => k !== "Mês" && k !== "__month");
-    const numericKeys = keys.filter(k => consolidated.some(r => isNumericVal(r[k]))).slice(0,3);
-    series = numericKeys.map((k, idx) => {
-      const palette = ["#4ea3ff","#55e37b","#ffb14e"];
-      return { name:k, color: palette[idx] || "#ffffff", values: consolidated.map(r => toNumber(r[k]) ?? 0) };
-    });
-  }
-
-  renderLegend(series);
-  renderLineChartSVG(labels, series);
-
-  // Render tabela consolidada (sem controles de paginação/download)
   const tableRows = consolidated.map(r => {
     const copy = {...r};
     delete copy.__month;
@@ -872,6 +872,7 @@ async function loadSelectionConsolidated() {
   });
 
   renderTableWithRows(tableRows, { emptyMsg: "Sem dados consolidados." });
+  updateConsolidatedUI();
 
   document.getElementById("consolidatedStatus").textContent =
     `Consolidado pronto: ${currentBU.toUpperCase()} • ${currentMonth === "ALL" ? "Todos os meses" : monthLabel(currentMonth)}`;
@@ -916,7 +917,6 @@ function setTab(view){
   tDaily.classList.toggle("active", view === "daily");
   tCons.classList.toggle("active", view === "consolidated");
 
-  // recarrega a visão atual com o estado do filtro
   refreshCurrentView();
 }
 
@@ -926,7 +926,6 @@ async function refreshCurrentView(){
   if (currentView === "daily") {
     await loadSelectionDaily();
   } else {
-    // consolidado não precisa do estado de "loadedRows" diário
     showEmpty("Carregando consolidado…");
     await loadSelectionConsolidated();
   }
@@ -963,7 +962,6 @@ function wireEvents() {
     el.type = (el.type === "password") ? "text" : "password";
   });
 
-  // tabs
   document.getElementById("tabDaily").addEventListener("click", () => setTab("daily"));
   document.getElementById("tabConsolidated").addEventListener("click", () => setTab("consolidated"));
 }

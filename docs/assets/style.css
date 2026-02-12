@@ -16,6 +16,7 @@
 
 *{ box-sizing:border-box; }
 html,body{ height:100%; }
+
 body{
   margin:0;
   font-family: var(--font);
@@ -94,9 +95,7 @@ body{
   border-color: rgba(255,255,255,.7);
 }
 
-.sidebar-actions{
-  margin-top: 12px;
-}
+.sidebar-actions{ margin-top: 12px; }
 .ghost-btn{
   width:100%;
   border-radius: 14px;
@@ -116,10 +115,7 @@ body{
 }
 
 /* CONTENT */
-.content{
-  padding: 26px 28px;
-  padding: 26px 28px;
-}
+.content{ padding: 26px 28px; }
 
 .topbar{
   display:flex;
@@ -164,15 +160,17 @@ body{
   box-shadow: var(--shadow);
 }
 
+/* TABLE */
 .table-wrap{
   width: 100%;
   overflow: auto;
   border-radius: 14px;
+  -webkit-overflow-scrolling: touch;
 }
 
 .data-table{
-  width: max-content;     /* deixa a tabela crescer naturalmente */
-  min-width: 100%;        /* nunca menor que o card */
+  width: max-content;
+  min-width: 100%;
   border-collapse: separate;
   border-spacing: 0;
 }
@@ -181,11 +179,7 @@ body{
   position: sticky;
   top: 0;
   z-index: 4;
-  background: linear-gradient(
-    180deg,
-    rgba(15,70,120,.98),
-    rgba(10,45,80,.98)
-  );
+  background: linear-gradient(180deg, rgba(15,70,120,.98), rgba(10,45,80,.98));
   border-bottom: 1px solid rgba(255,255,255,.12);
   padding: 14px 14px;
   text-align: left;
@@ -194,15 +188,15 @@ body{
   white-space: nowrap;
 }
 
-/* Primeira coluna fixa (Data) */
+/* Primeira coluna fixa */
 .data-table thead th:first-child,
 .data-table tbody td:first-child{
   position: sticky;
   left: 0;
   z-index: 5;
 }
+.data-table thead th:first-child{ z-index: 6; }
 
-/* Fundo da coluna fixa */
 .data-table tbody td:first-child{
   background: rgba(7,20,34,.96);
   backdrop-filter: blur(4px);
@@ -213,16 +207,23 @@ body{
   border-bottom: 1px solid rgba(255,255,255,.06);
   font-size: 13px;
   white-space: nowrap;
-  font-variant-numeric: tabular-nums; /* números alinhados */
+  font-variant-numeric: tabular-nums;
 }
 
-.data-table tbody tr:hover td{
-  background: rgba(255,255,255,.04);
+.data-table tbody tr:hover td{ background: rgba(255,255,255,.04); }
+.data-table td:not(:first-child){ text-align: right; }
+
+.data-table thead th:first-child,
+.data-table tbody td:first-child{
+  box-shadow: 10px 0 18px rgba(0,0,0,.25);
+  border-right: 1px solid rgba(255,255,255,.08);
+}
+.data-table tbody tr:hover td:first-child{
+  background: rgba(7,20,34,.96);
 }
 
-.data-table td:not(:first-child){
-  text-align: right;
-}
+.data-table tbody tr:nth-child(even) td{ background: rgba(255,255,255,.015); }
+.data-table tbody tr:nth-child(even):hover td{ background: rgba(255,255,255,.04); }
 
 .table-controls{
   display:flex;
@@ -231,17 +232,9 @@ body{
   gap:12px;
   padding: 10px 0;
 }
-.table-controls__info{
-  opacity:.92;
-}
-.table-controls__actions{
-  display:flex;
-  gap:10px;
-}
-.muted{
-  color: var(--muted);
-  margin-left: 6px;
-}
+.table-controls__info{ opacity:.92; }
+.table-controls__actions{ display:flex; gap:10px; }
+.muted{ color: var(--muted); margin-left: 6px; }
 
 .mini-btn{
   cursor:pointer;
@@ -252,28 +245,16 @@ body{
   color:#fff;
   font-weight: 900;
 }
-.mini-btn.strong{
-  background: rgba(255,255,255,.12);
-}
+.mini-btn.strong{ background: rgba(255,255,255,.12); }
 
 /* SIDEBAR COLLAPSE */
-body.sidebar-collapsed .layout{
-  grid-template-columns: 86px 1fr;
-}
+body.sidebar-collapsed .layout{ grid-template-columns: 86px 1fr; }
 body.sidebar-collapsed .brand,
 body.sidebar-collapsed .month-filter,
 body.sidebar-collapsed .updated,
-body.sidebar-collapsed .sidebar-actions{
-  display:none;
-}
-body.sidebar-collapsed .nav-btn{
-  font-size: 0;
-  padding: 18px 10px;
-}
-body.sidebar-collapsed .nav-btn::after{
-  content: "•";
-  font-size: 22px;
-}
+body.sidebar-collapsed .sidebar-actions{ display:none; }
+body.sidebar-collapsed .nav-btn{ font-size: 0; padding: 18px 10px; }
+body.sidebar-collapsed .nav-btn::after{ content: "•"; font-size: 22px; }
 
 /* LOGIN */
 .login-overlay{
@@ -317,19 +298,10 @@ body.sidebar-collapsed .nav-btn::after{
   border: 1px solid rgba(255,255,255,.16);
 }
 
-.login-h1{
-  font-size: 18px;
-  font-weight: 950;
-}
-.login-h2{
-  font-size: 13px;
-  color: var(--muted);
-  margin-top: 2px;
-}
+.login-h1{ font-size: 18px; font-weight: 950; }
+.login-h2{ font-size: 13px; color: var(--muted); margin-top: 2px; }
 
-.login-form{
-  margin-top: 10px;
-}
+.login-form{ margin-top: 10px; }
 
 .login-label{
   display:block;
@@ -416,45 +388,14 @@ body.sidebar-collapsed .nav-btn::after{
   justify-content: space-between;
 }
 
+/* Fallback blur */
+@supports not ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))){
+  .data-table tbody td:first-child{ backdrop-filter: none; }
+}
+
 /* MOBILE */
 @media (max-width: 920px){
   .layout{ grid-template-columns: 1fr; }
   .sidebar{ position: relative; height:auto; }
   .content{ padding: 18px; }
-}
-/* ===== PATCH: coluna fixa + hover + z-index ===== */
-
-/* Garante que o TH fixo (Data) fique acima do restante do header */
-.data-table thead th:first-child{
-  z-index: 6; /* > th normal (4) e > td fixo (5) */
-}
-
-/* Melhora separação visual da coluna fixa */
-.data-table thead th:first-child,
-.data-table tbody td:first-child{
-  box-shadow: 10px 0 18px rgba(0,0,0,.25);
-  border-right: 1px solid rgba(255,255,255,.08);
-}
-
-/* Mantém o fundo da coluna fixa mesmo no hover (evita “lavar” a coluna) */
-.data-table tbody tr:hover td:first-child{
-  background: rgba(7,20,34,.96);
-}
-
-/* Fallback para browsers/PCs que não curtem backdrop-filter */
-@supports not ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))){
-  .data-table tbody td:first-child{
-    backdrop-filter: none;
-  }
-}
-
-/* Scroll mais suave no card da tabela */
-.table-wrap{
-  -webkit-overflow-scrolling: touch;
-}
-.data-table tbody tr:nth-child(even) td{
-  background: rgba(255,255,255,.015);
-}
-.data-table tbody tr:nth-child(even):hover td{
-  background: rgba(255,255,255,.04);
 }
